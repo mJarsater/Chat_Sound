@@ -1,10 +1,11 @@
 import javax.sound.sampled.*;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.UnknownHostException;
 
 import static java.lang.Thread.sleep;
 
@@ -16,6 +17,7 @@ public class Chat_Sound extends JFrame {
     private SoundRecorder newRecording;
 
     public Chat_Sound(){
+
         recordingStatus = new JLabel("Recording: Waiting..");
         recordingStatus.setBounds(10, 380, 200, 20);
 
@@ -47,7 +49,7 @@ public class Chat_Sound extends JFrame {
         this.setLayout(null);
         this.setVisible(true);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-
+        new SoundReceiver(messageArea);
 
     }
 
@@ -96,7 +98,7 @@ public class Chat_Sound extends JFrame {
     public void sendListner(ActionEvent e){
         sendBtn.setEnabled(false);
         addSentMsg();
-        //Start recording
+        SoundSender send = new SoundSender(wavFile);
 
         recordingStatus.setText("Recording: Sent");
         reset();
@@ -121,11 +123,62 @@ public class Chat_Sound extends JFrame {
 }
 
 class SoundSender{
+    File voiceMsg;
 
+    public SoundSender(File voiceMsg){
+        this.voiceMsg = voiceMsg;
+        try{
+            InetAddress sendTo = InetAddress.getByName("127.0.0.1");
+            Socket socket = new Socket(sendTo, 1234);
+            FileInputStream inputStream = new FileInputStream(voiceMsg);
+            OutputStream outputStream = socket.getOutputStream();
+            byte[] buffer = new byte[4096];
+
+            for(int byteRead = inputStream.read(buffer); byteRead != 1; byteRead = inputStream.read(buffer)){
+                outputStream.write(buffer, 0, byteRead);
+            }
+            socket.close();
+            inputStream.close();
+            outputStream.close();
+
+
+        } catch (UnknownHostException unk){
+            unk.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
 
 class SoundReceiver{
+    private boolean alive;
+    private ServerSocket serverSocket;
+    private JTextArea messageArea;
 
+    public SoundReceiver(JTextArea messageArea) {
+        this.messageArea = messageArea;
+
+        alive = true;
+        while (alive) {
+            try {
+                serverSocket = new ServerSocket(1234);
+                Socket connection = serverSocket.accept();
+                ObjectInputStream inputStream = new ObjectInputStream(connection.getInputStream());
+
+                byte[] buffer = (byte[]) inputStream.readObject();
+                FileOutputStream outputStream = new FileOutputStream("msg.wav");
+                outputStream.write(buffer);
+                messageArea.append("New Message");
+
+            } catch (IOException | ClassNotFoundException ioe) {
+                ioe.printStackTrace();
+            }
+        }
+    }
+
+    public void kill(){
+        alive = false;
+    }
 }
 
 class SoundRecorder {
